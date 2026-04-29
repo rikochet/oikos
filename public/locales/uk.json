@@ -769,7 +769,7 @@
     "backupRestoring": "Відновлення...",
     "backupRestoredToast": "Базу даних відновлено. Перезавантаження...",
     "backupCliTitle": "Відновлення CLI / Docker Compose",
-    "backupCliHint": "For operational restores, stop the app, mount the backup in a temporary container and replace the database file.",
+    "backupCliHint": "Для операційного відновлення зупиніть застосунок, підключіть резервну копію до тимчасового контейнера і замініть файл бази даних.",
     "backupCliBackupHint": "Також можна створити копію безпосередньо через Docker Compose:"
   },
   "login": {

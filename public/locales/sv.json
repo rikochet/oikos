@@ -769,7 +769,7 @@
     "backupRestoring": "Återställer...",
     "backupRestoredToast": "Databasen återställd. Laddar om...",
     "backupCliTitle": "CLI / Docker Compose-återställning",
-    "backupCliHint": "For operational restores, stop the app, mount the backup in a temporary container and replace the database file.",
+    "backupCliHint": "För operativa återställningar, stoppa appen, montera backupen i en tillfällig container och ersätt databasfilen.",
     "backupCliBackupHint": "Du kan också skapa en backup direkt med Docker Compose:"
   },
   "login": {

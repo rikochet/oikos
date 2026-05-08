@@ -979,7 +979,12 @@
     "addressbookEnabled": "Addressbook enabled",
     "addressbookDisabled": "Addressbook disabled",
     "addressbooksRefreshed": "Addressbooks refreshed",
-    "deleteCardDAVAccountConfirm": "Really delete CardDAV account? All synced contacts will remain but lose their CardDAV link."
+    "deleteCardDAVAccountConfirm": "Really delete CardDAV account? All synced contacts will remain but lose their CardDAV link.",
+    "sectionHousekeeping": "Faxina",
+    "housekeepingPaymentsTitle": "Tarefas de pagamento",
+    "housekeepingPaymentTasksLabel": "Criar uma tarefa de pagamento a cada entrada da faxineira",
+    "housekeepingPaymentTasksHint": "Quando ativo, cada entrada cria uma tarefa para pagar a pessoa da equipe. Ao concluir essa tarefa, o pagamento da visita é marcado como pago.",
+    "housekeepingPaymentTasksSaved": "Configuração de pagamento da faxina salva."
   },
   "login": {
     "tagline": "Planejamento familiar. Seguro. Privado. Código aberto.",
@@ -1260,7 +1265,7 @@
     "createTask": "Criar tarefa",
     "taskCreatedToast": "Tarefa de faxina criada.",
     "dashboard": "Painel",
-    "reports": "Ocorrências",
+    "reports": "Relatórios",
     "visitsThisMonth": "Visitas no mês",
     "lastVisit": "Última visita",
     "pendingChores": "Tarefas pendentes",
@@ -1296,6 +1301,19 @@
     "noWorkers": "Nenhuma faxineira cadastrada.",
     "moreWorkers": "+{{count}} a mais",
     "checkInDisabled": "Cadastre uma faxineira antes de fazer check-in.",
-    "calendarColor": "Cor no calendário"
+    "calendarColor": "Cor no calendário",
+    "visitRecordedAt": "Visita registrada às",
+    "checkedInToday": "Registrada hoje",
+    "visitReports": "Relatórios de visitas da equipe",
+    "noVisitReports": "Nenhuma visita da equipe registrada neste mês.",
+    "openVisitReport": "Abrir relatório da visita",
+    "visitReportDetails": "Relatório da visita",
+    "paymentPaid": "Pago",
+    "paymentPending": "Pendente",
+    "totalPayment": "Pagamento total",
+    "paymentStatus": "Status do pagamento",
+    "paymentTask": "Tarefa de pagamento",
+    "calendarEvent": "Evento do calendário",
+    "notAvailable": "Não disponível"
   }
 }

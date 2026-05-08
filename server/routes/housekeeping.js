@@ -19,7 +19,8 @@ const MAX_PHOTO_DATA_LENGTH = 6 * 1024 * 1024;
 const IMAGE_DATA_RE = /^data:image\/(?:png|jpeg|webp);base64,[a-z0-9+/=]+$/i;
 const PAYMENT_SCHEDULES = ['daily', 'twice_monthly', 'monthly'];
 const DEFAULT_CALENDAR_COLOR = '#7C3AED';
-const HOUSEKEEPING_EVENT_ICON = 'sparkles';
+const HOUSEKEEPING_EVENT_ICON = 'paintbrush';
+const PAYMENT_TASKS_PREF = 'housekeeping_payment_tasks';
 
 const TASK_TEMPLATES = [
   { name: 'Clean bathrooms', area: 'Bathrooms', frequency_days: 7 },
@@ -50,6 +51,7 @@ function publicSession(row) {
     id: row.id,
     worker_id: row.worker_id ?? null,
     calendar_event_id: row.calendar_event_id ?? null,
+    payment_task_id: row.payment_task_id ?? null,
     check_in: row.check_in,
     check_out: row.check_out,
     daily_rate: Number(row.daily_rate || 0),
@@ -62,7 +64,7 @@ function publicSession(row) {
 
 function publicWorker(row) {
   if (!row) return null;
-  const openSession = loadOpenSession(row.id);
+  const todaySession = loadTodaySession(row.id);
   return {
     id: row.id,
     user_id: row.user_id,
@@ -76,7 +78,8 @@ function publicWorker(row) {
     daily_rate: Number(row.daily_rate || 0),
     payment_schedule: row.payment_schedule,
     calendar_color: row.calendar_color || DEFAULT_CALENDAR_COLOR,
-    current_session: publicSession(openSession),
+    current_session: publicSession(todaySession),
+    today_session: publicSession(todaySession),
     notes: row.notes ?? null,
     created_at: row.created_at,
     updated_at: row.updated_at,
@@ -147,6 +150,20 @@ function loadOpenSession(workerId = null) {
   `).get();
 }
 
+function loadTodaySession(workerId) {
+  return db.get().prepare(`
+    SELECT * FROM housekeeping_work_sessions
+    WHERE worker_id = ? AND substr(check_in, 1, 10) = substr(strftime('%Y-%m-%dT%H:%M:%SZ', 'now'), 1, 10)
+    ORDER BY check_in DESC
+    LIMIT 1
+  `).get(workerId);
+}
+
+function housekeepingPaymentTasksEnabled(database = db.get()) {
+  const row = database.prepare('SELECT value FROM sync_config WHERE key = ?').get(PAYMENT_TASKS_PREF);
+  return row?.value === '1';
+}
+
 function defaultDailyRate() {
   const worker = loadWorker();
   if (worker) return Number(worker.daily_rate || 0);
@@ -181,13 +198,14 @@ function loadWorkers() {
 }
 
 function createVisitCalendarEvent(database, worker, checkIn, actorId) {
+  const visitDate = checkIn.slice(0, 10);
   const result = database.prepare(`
     INSERT INTO calendar_events
       (title, start_datetime, end_datetime, all_day, color, icon, assigned_to, created_by, external_source)
-    VALUES (?, ?, NULL, 0, ?, ?, ?, ?, 'local')
+    VALUES (?, ?, NULL, 1, ?, ?, ?, ?, 'local')
   `).run(
     `Housekeeping: ${worker.display_name}`,
-    checkIn,
+    visitDate,
     worker.calendar_color || DEFAULT_CALENDAR_COLOR,
     HOUSEKEEPING_EVENT_ICON,
     worker.user_id,
@@ -198,9 +216,29 @@ function createVisitCalendarEvent(database, worker, checkIn, actorId) {
   return result.lastInsertRowid;
 }
 
-function updateVisitCalendarEvent(database, eventId, checkOut) {
-  if (!eventId) return;
-  database.prepare('UPDATE calendar_events SET end_datetime = ? WHERE id = ?').run(checkOut, eventId);
+function createPaymentTask(database, worker, checkIn, amount, actorId) {
+  const visitDate = checkIn.slice(0, 10);
+  const title = `Pay ${worker.display_name} for housekeeping`;
+  const description = `Housekeeping visit on ${visitDate}. Amount due: ${amount.toFixed(2)}.`;
+  const result = database.prepare(`
+    INSERT INTO tasks (title, description, due_date, priority, category, status, created_by)
+    VALUES (?, ?, ?, 'medium', 'household', 'open', ?)
+  `).run(title, description, visitDate, actorId);
+  return result.lastInsertRowid;
+}
+
+function reconcilePaymentTasks(database = db.get()) {
+  database.prepare(`
+    UPDATE housekeeping_work_sessions
+    SET paid_at = COALESCE(paid_at, strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+    WHERE payment_task_id IS NOT NULL
+      AND paid_at IS NULL
+      AND EXISTS (
+        SELECT 1 FROM tasks
+        WHERE tasks.id = housekeeping_work_sessions.payment_task_id
+          AND tasks.status = 'done'
+      )
+  `).run();
 }
 
 function loadWorkerById(workerId) {
@@ -242,10 +280,10 @@ function monthlySummary(monthValue = currentMonth()) {
 }
 
 function housekeepingDashboard() {
+  reconcilePaymentTasks();
   const monthValue = currentMonth();
   const workers = loadWorkers().map(publicWorker);
   const worker = workers[0] ?? null;
-  const openSession = publicSession(loadOpenSession());
   const summary = monthlySummary(monthValue);
   const lastVisit = db.get().prepare(`
     SELECT * FROM housekeeping_work_sessions
@@ -254,7 +292,7 @@ function housekeepingDashboard() {
   `).get();
   const payment = db.get().prepare(`
     SELECT
-      COALESCE(SUM(CASE WHEN paid_at IS NULL AND check_out IS NOT NULL THEN daily_rate + extras ELSE 0 END), 0) AS pending,
+      COALESCE(SUM(CASE WHEN paid_at IS NULL THEN daily_rate + extras ELSE 0 END), 0) AS pending,
       COALESCE(SUM(CASE WHEN paid_at IS NOT NULL THEN daily_rate + extras ELSE 0 END), 0) AS paid
     FROM housekeeping_work_sessions
     WHERE substr(check_in, 1, 7) = ?
@@ -264,7 +302,7 @@ function housekeepingDashboard() {
   const chart = db.get().prepare(`
     SELECT substr(check_in, 1, 7) AS month,
            COALESCE(SUM(daily_rate + extras), 0) AS total,
-           COALESCE(SUM(CASE WHEN paid_at IS NULL AND check_out IS NOT NULL THEN daily_rate + extras ELSE 0 END), 0) AS pending
+           COALESCE(SUM(CASE WHEN paid_at IS NULL THEN daily_rate + extras ELSE 0 END), 0) AS pending
     FROM housekeeping_work_sessions
     WHERE check_in >= strftime('%Y-%m-01T00:00:00Z', 'now', '-5 months')
     GROUP BY substr(check_in, 1, 7)
@@ -278,7 +316,7 @@ function housekeepingDashboard() {
   return {
     worker,
     workers,
-    current_session: openSession,
+    current_session: null,
     visits_this_month: summary.session_count,
     last_visit: publicSession(lastVisit),
     pending_tasks: tasks.filter((task) => task.urgency_status !== 'ok').length,
@@ -472,6 +510,7 @@ router.get('/summary', (req, res) => {
 
 router.get('/work-sessions', (req, res) => {
   try {
+    reconcilePaymentTasks();
     const vMonth = month(req.query.month, 'month');
     if (vMonth.error) return res.status(400).json({ error: vMonth.error, code: 400 });
     const rows = db.get().prepare(`
@@ -486,6 +525,50 @@ router.get('/work-sessions', (req, res) => {
   }
 });
 
+router.get('/visits', (req, res) => {
+  try {
+    reconcilePaymentTasks();
+    const vMonth = month(req.query.month, 'month');
+    if (vMonth.error) return res.status(400).json({ error: vMonth.error, code: 400 });
+    const selectedMonth = vMonth.value || currentMonth();
+    const rows = db.get().prepare(`
+      SELECT hws.*,
+             hw.payment_schedule,
+             u.display_name AS worker_name,
+             u.avatar_color AS worker_avatar_color,
+             u.avatar_data AS worker_avatar_data,
+             t.status AS payment_task_status,
+             t.title AS payment_task_title
+      FROM housekeeping_work_sessions hws
+      LEFT JOIN housekeeping_workers hw ON hw.id = hws.worker_id
+      LEFT JOIN users u ON u.id = hw.user_id
+      LEFT JOIN tasks t ON t.id = hws.payment_task_id
+      WHERE substr(hws.check_in, 1, 7) = ?
+      ORDER BY hws.check_in DESC
+    `).all(selectedMonth);
+    const visits = rows.map((row) => ({
+      ...publicSession(row),
+      worker_name: row.worker_name ?? null,
+      worker_avatar_color: row.worker_avatar_color ?? DEFAULT_CALENDAR_COLOR,
+      worker_avatar_data: row.worker_avatar_data ?? null,
+      payment_schedule: row.payment_schedule ?? 'monthly',
+      payment_task_status: row.payment_task_status ?? null,
+      payment_task_title: row.payment_task_title ?? null,
+      total_amount: Number(row.daily_rate || 0) + Number(row.extras || 0),
+    }));
+    const totals = visits.reduce((acc, visit) => {
+      acc.total += visit.total_amount;
+      if (visit.paid_at) acc.paid += visit.total_amount;
+      else acc.pending += visit.total_amount;
+      return acc;
+    }, { total: 0, paid: 0, pending: 0 });
+    res.json({ data: { month: selectedMonth, visits, totals } });
+  } catch (err) {
+    log.error('GET /visits error:', err);
+    res.status(500).json({ error: 'Internal server error.', code: 500 });
+  }
+});
+
 router.post('/work-sessions/check-in', (req, res) => {
   try {
     if (loadWorkers().length === 0) {
@@ -495,7 +578,7 @@ router.post('/work-sessions/check-in', (req, res) => {
     if (vWorkerId.error) return res.status(400).json({ error: vWorkerId.error, code: 400 });
     const worker = loadWorkerById(vWorkerId.value);
     if (!worker) return res.status(404).json({ error: 'Housekeeper not found.', code: 404 });
-    if (loadOpenSession(worker.id)) return res.status(409).json({ error: 'A work session is already open for this housekeeper.', code: 409 });
+    if (loadTodaySession(worker.id)) return res.status(409).json({ error: 'A visit is already recorded today for this housekeeper.', code: 409 });
 
     const vDailyRate = num(req.body.daily_rate, 'daily_rate', { required: true });
     const vExtras = num(req.body.extras, 'extras');
@@ -509,10 +592,14 @@ router.post('/work-sessions/check-in', (req, res) => {
     const checkIn = nowIso();
     const result = db.get().transaction(() => {
       const eventId = createVisitCalendarEvent(db.get(), worker, checkIn, actorId);
+      const totalAmount = Number(vDailyRate.value || 0) + Number(vExtras.value || 0);
+      const taskId = housekeepingPaymentTasksEnabled(db.get())
+        ? createPaymentTask(db.get(), worker, checkIn, totalAmount, actorId)
+        : null;
       return db.get().prepare(`
-        INSERT INTO housekeeping_work_sessions (worker_id, check_in, daily_rate, extras, calendar_event_id, created_by)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `).run(worker.id, checkIn, vDailyRate.value, vExtras.value ?? 0, eventId, actorId);
+        INSERT INTO housekeeping_work_sessions (worker_id, check_in, check_out, daily_rate, extras, calendar_event_id, payment_task_id, created_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(worker.id, checkIn, checkIn, vDailyRate.value, vExtras.value ?? 0, eventId, taskId, actorId);
     })();
     const row = db.get().prepare('SELECT * FROM housekeeping_work_sessions WHERE id = ?').get(result.lastInsertRowid);
     res.status(201).json({ data: publicSession(row), summary: monthlySummary() });
@@ -542,7 +629,6 @@ router.post('/work-sessions/check-out', (req, res) => {
         SET check_out = ?, extras = ?
         WHERE id = ?
       `).run(checkOut, vExtras.value ?? session.extras, session.id);
-      updateVisitCalendarEvent(db.get(), session.calendar_event_id, checkOut);
     })();
     const row = db.get().prepare('SELECT * FROM housekeeping_work_sessions WHERE id = ?').get(session.id);
     res.json({ data: publicSession(row), summary: monthlySummary(row.check_in.slice(0, 7)) });

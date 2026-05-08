@@ -7,18 +7,18 @@
 import { api } from '/api.js';
 import { t, formatDate, formatTime } from '/i18n.js';
 import { esc } from '/utils/html.js';
+import { openModal, closeModal } from '/components/modal.js';
 
 let state = {
   tab: 'dashboard',
   dashboard: null,
   tasks: [],
   reports: [],
+  visitReport: null,
   templates: [],
   worker: null,
   workers: [],
-  photoUrl: null,
   workerAvatar: undefined,
-  editingWorker: null,
 };
 
 function money(value) {
@@ -48,13 +48,14 @@ async function loadData() {
   const [dashboard, tasks, reports, templates, workers] = await Promise.all([
     api.get('/housekeeping/dashboard'),
     api.get('/housekeeping/decay-tasks'),
-    api.get('/housekeeping/maintenance-log'),
+    api.get('/housekeeping/visits'),
     api.get('/housekeeping/task-templates'),
     api.get('/housekeeping/workers'),
   ]);
   state.dashboard = dashboard.data;
   state.tasks = tasks.data || [];
-  state.reports = reports.data || [];
+  state.visitReport = reports.data || { visits: [], totals: {} };
+  state.reports = state.visitReport.visits || [];
   state.templates = templates.data || [];
   state.workers = workers.data || [];
   state.worker = state.workers[0] || null;
@@ -85,7 +86,7 @@ function renderShell(container) {
       <nav class="housekeeping-tabs" aria-label="${esc(t('housekeeping.bottomNav'))}">
         ${renderTabButton('dashboard', 'layout-dashboard', t('housekeeping.dashboard'))}
         ${renderTabButton('tasks', 'list-checks', t('housekeeping.tasks'))}
-        ${renderTabButton('reports', 'message-square-warning', t('housekeeping.reports'))}
+        ${renderTabButton('reports', 'file-text', t('housekeeping.reports'))}
         ${renderTabButton('staff', 'users-round', t('housekeeping.staff'))}
       </nav>
       <div class="housekeeping-content" id="housekeeping-content"></div>
@@ -118,24 +119,20 @@ function renderCurrentTab(container) {
 
 async function toggleSession(container, workerId) {
   const worker = state.workers.find((item) => String(item.id) === String(workerId));
-  const current = worker?.current_session;
+  const current = worker?.today_session || worker?.current_session;
   if (!state.workers.length) {
     window.oikos?.showToast(t('housekeeping.checkInDisabled'), 'warning');
     return;
   }
   if (!worker) return;
+  if (current) return;
   try {
-    if (current) {
-      await api.post('/housekeeping/work-sessions/check-out', { worker_id: worker.id, extras: current.extras || 0 });
-      window.oikos?.showToast(t('housekeeping.checkedOutToast'), 'success');
-    } else {
-      await api.post('/housekeeping/work-sessions/check-in', {
-        worker_id: worker.id,
-        daily_rate: worker.daily_rate || 0,
-        extras: 0,
-      });
-      window.oikos?.showToast(t('housekeeping.checkedInToast'), 'success');
-    }
+    await api.post('/housekeeping/work-sessions/check-in', {
+      worker_id: worker.id,
+      daily_rate: worker.daily_rate || 0,
+      extras: 0,
+    });
+    window.oikos?.showToast(t('housekeeping.checkedInToast'), 'success');
     await loadData();
     renderShell(container);
   } catch (err) {
@@ -160,7 +157,8 @@ function renderWorkerSummary() {
     `;
   }
   const rows = state.workers.map((worker) => {
-    const checkedIn = !!worker.current_session;
+    const checkedIn = !!(worker.today_session || worker.current_session);
+    const session = worker.today_session || worker.current_session;
     return `
     <section class="housekeeping-worker-strip">
       <div class="housekeeping-avatar" style="background:${esc(worker.avatar_color || '#7C3AED')}">
@@ -168,12 +166,12 @@ function renderWorkerSummary() {
       </div>
       <div>
         <strong>${esc(worker.display_name)}</strong>
-        <span>${esc(checkedIn ? `${t('housekeeping.checkedInAt')} ${formatTime(worker.current_session.check_in)}` : `${money(worker.daily_rate)} · ${scheduleLabel(worker.payment_schedule)}`)}</span>
+        <span>${esc(checkedIn ? `${t('housekeeping.visitRecordedAt')} ${formatTime(session.check_in)}` : `${money(worker.daily_rate)} · ${scheduleLabel(worker.payment_schedule)}`)}</span>
       </div>
-      <button class="btn ${checkedIn ? 'btn--danger-outline' : 'btn--primary'} housekeeping-check-small" type="button"
-              data-worker-check="${worker.id}">
-        <i data-lucide="${checkedIn ? 'log-out' : 'log-in'}" aria-hidden="true"></i>
-        <span>${esc(checkedIn ? t('housekeeping.checkOut') : t('housekeeping.checkIn'))}</span>
+      <button class="btn ${checkedIn ? 'btn--secondary' : 'btn--primary'} housekeeping-check-small" type="button"
+              data-worker-check="${worker.id}" ${checkedIn ? 'disabled' : ''}>
+        <i data-lucide="${checkedIn ? 'check' : 'log-in'}" aria-hidden="true"></i>
+        <span>${esc(checkedIn ? t('housekeeping.checkedInToday') : t('housekeeping.checkIn'))}</span>
       </button>
     </section>
   `;
@@ -340,78 +338,92 @@ function renderTasks(content) {
 
 function renderReports(content) {
   content.replaceChildren();
-  const latest = state.reports.map((report) => `
-    <article class="housekeeping-report-item">
-      ${report.photo_url ? `<img src="${esc(report.photo_url)}" alt="">` : '<i data-lucide="wrench" aria-hidden="true"></i>'}
-      <div>
-        <strong>${esc(report.description)}</strong>
-        <span>${esc(formatDate(report.created_at))}</span>
+  const totals = state.visitReport?.totals || {};
+  const visits = state.reports || [];
+  const rows = visits.map((visit) => {
+    const paid = !!visit.paid_at;
+    return `
+    <article class="housekeeping-report-item housekeeping-report-item--visit">
+      <div class="housekeeping-avatar" style="background:${esc(visit.worker_avatar_color || '#7C3AED')}">
+        ${visit.worker_avatar_data ? `<img src="${esc(visit.worker_avatar_data)}" alt="${esc(visit.worker_name || '')}">` : esc(initials(visit.worker_name || 'HK'))}
       </div>
+      <div>
+        <strong>${esc(visit.worker_name || t('housekeeping.staff'))}</strong>
+        <span>${esc(formatDate(visit.check_in))} · ${esc(money(visit.total_amount))} · ${esc(paid ? t('housekeeping.paymentPaid') : t('housekeeping.paymentPending'))}</span>
+      </div>
+      <button class="btn btn--secondary btn--icon" type="button" data-visit-report="${visit.id}" aria-label="${esc(t('housekeeping.openVisitReport'))}">
+        <i data-lucide="file-text" aria-hidden="true"></i>
+      </button>
     </article>
-  `).join('');
+  `;
+  }).join('');
 
   content.insertAdjacentHTML('beforeend', `
     <section class="housekeeping-card">
-      <h2>${esc(t('housekeeping.reportTitle'))}</h2>
-      <form id="housekeeping-report-form" class="housekeeping-report-form">
-        <label class="housekeeping-field">
-          <span>${esc(t('housekeeping.problemDescription'))}</span>
-          <textarea name="description" rows="4" required maxlength="5000" placeholder="${esc(t('housekeeping.problemPlaceholder'))}"></textarea>
-        </label>
-        <label class="housekeeping-photo">
-          <input id="housekeeping-photo-input" type="file" accept="image/png,image/jpeg,image/webp" capture="environment">
-          <i data-lucide="camera" aria-hidden="true"></i>
-          <span>${esc(t('housekeeping.addPhoto'))}</span>
-        </label>
-        <img class="housekeeping-photo-preview" id="housekeeping-photo-preview" alt="" hidden>
-        <button class="btn btn--primary housekeeping-form-submit" type="submit">
-          <i data-lucide="send" aria-hidden="true"></i>
-          <span>${esc(t('housekeeping.sendReport'))}</span>
-        </button>
-      </form>
+      <div class="housekeeping-section-heading">
+        <h2>${esc(t('housekeeping.visitReports'))}</h2>
+        <span>${esc(state.visitReport?.month || '')}</span>
+      </div>
+      <section class="housekeeping-metrics housekeeping-metrics--compact">
+        <article class="housekeeping-metric">
+          <span>${esc(t('housekeeping.visitsThisMonth'))}</span>
+          <strong>${esc(visits.length)}</strong>
+        </article>
+        <article class="housekeeping-metric">
+          <span>${esc(t('housekeeping.pendingPayments'))}</span>
+          <strong>${esc(money(totals.pending || 0))}</strong>
+        </article>
+        <article class="housekeeping-metric">
+          <span>${esc(t('housekeeping.paymentPaid'))}</span>
+          <strong>${esc(money(totals.paid || 0))}</strong>
+        </article>
+      </section>
     </section>
     <section class="housekeeping-reports" aria-label="${esc(t('housekeeping.recentReports'))}">
-      ${latest || `<p class="housekeeping-muted">${esc(t('housekeeping.noReports'))}</p>`}
+      ${rows || `<p class="housekeeping-muted">${esc(t('housekeeping.noVisitReports'))}</p>`}
     </section>
   `);
 
-  const photoInput = content.querySelector('#housekeeping-photo-input');
-  const preview = content.querySelector('#housekeeping-photo-preview');
-  photoInput?.addEventListener('change', () => {
-    const file = photoInput.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.addEventListener('load', () => {
-      state.photoUrl = String(reader.result || '');
-      if (preview) {
-        preview.src = state.photoUrl;
-        preview.hidden = false;
-      }
+  content.querySelectorAll('[data-visit-report]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const visit = visits.find((item) => String(item.id) === btn.dataset.visitReport);
+      if (visit) openVisitReportModal(visit);
     });
-    reader.readAsDataURL(file);
   });
+}
 
-  content.querySelector('#housekeeping-report-form')?.addEventListener('submit', async (event) => {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const description = form.description.value.trim();
-    if (!description) return;
-    try {
-      await api.post('/housekeeping/maintenance-log', { description, photo_url: state.photoUrl });
-      state.photoUrl = null;
-      window.oikos?.showToast(t('housekeeping.reportSentToast'), 'success');
-      await loadData();
-      renderReports(content);
-    } catch (err) {
-      window.oikos?.showToast(err.message, 'danger');
-    }
+function openVisitReportModal(visit) {
+  const paid = !!visit.paid_at;
+  openModal({
+    title: t('housekeeping.visitReportDetails'),
+    size: 'md',
+    content: `
+      <div class="housekeeping-report-modal">
+        <div class="housekeeping-staff-row">
+          <div class="housekeeping-avatar" style="background:${esc(visit.worker_avatar_color || '#7C3AED')}">
+            ${visit.worker_avatar_data ? `<img src="${esc(visit.worker_avatar_data)}" alt="${esc(visit.worker_name || '')}">` : esc(initials(visit.worker_name || 'HK'))}
+          </div>
+          <div>
+            <strong>${esc(visit.worker_name || t('housekeeping.staff'))}</strong>
+            <span>${esc(scheduleLabel(visit.payment_schedule))}</span>
+          </div>
+        </div>
+        <dl class="housekeeping-report-details">
+          <div><dt>${esc(t('housekeeping.lastVisit'))}</dt><dd>${esc(formatDate(visit.check_in))} · ${esc(formatTime(visit.check_in))}</dd></div>
+          <div><dt>${esc(t('housekeeping.dailyRate'))}</dt><dd>${esc(money(visit.daily_rate))}</dd></div>
+          <div><dt>${esc(t('housekeeping.extras'))}</dt><dd>${esc(money(visit.extras))}</dd></div>
+          <div><dt>${esc(t('housekeeping.totalPayment'))}</dt><dd>${esc(money(visit.total_amount))}</dd></div>
+          <div><dt>${esc(t('housekeeping.paymentStatus'))}</dt><dd>${esc(paid ? t('housekeeping.paymentPaid') : t('housekeeping.paymentPending'))}</dd></div>
+          <div><dt>${esc(t('housekeeping.paymentTask'))}</dt><dd>${esc(visit.payment_task_id ? `#${visit.payment_task_id}` : t('housekeeping.notAvailable'))}</dd></div>
+          <div><dt>${esc(t('housekeeping.calendarEvent'))}</dt><dd>${esc(visit.calendar_event_id ? `#${visit.calendar_event_id}` : t('housekeeping.notAvailable'))}</dd></div>
+        </dl>
+      </div>
+    `,
   });
 }
 
 function renderStaff(content) {
   content.replaceChildren();
-  const worker = state.editingWorker || {};
-  state.workerAvatar = worker.avatar_data ?? null;
   const workerRows = state.workers.map((item) => `
     <article class="housekeeping-staff-row">
       <div class="housekeeping-avatar" style="background:${esc(item.avatar_color || '#7C3AED')}">
@@ -439,86 +451,123 @@ function renderStaff(content) {
         ${workerRows || `<p class="housekeeping-muted">${esc(t('housekeeping.noWorkers'))}</p>`}
       </div>
     </section>
-    <section class="housekeeping-card">
-      <h2>${esc(worker.id ? t('housekeeping.editWorker') : t('housekeeping.addWorker'))}</h2>
+  `);
+
+  content.querySelector('#housekeeping-new-worker')?.addEventListener('click', () => {
+    openStaffModal(null, content);
+  });
+  content.querySelectorAll('[data-edit-worker]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const worker = state.workers.find((item) => String(item.id) === btn.dataset.editWorker) || null;
+      openStaffModal(worker, content);
+    });
+  });
+}
+
+function openStaffModal(worker, content) {
+  const item = worker || {};
+  state.workerAvatar = item.avatar_data ?? null;
+  openModal({
+    title: item.id ? t('housekeeping.editWorker') : t('housekeeping.addWorker'),
+    size: 'lg',
+    content: `
       <form id="housekeeping-worker-form" class="housekeeping-worker-form">
-        <input type="hidden" name="id" value="${esc(worker.id || '')}">
+        <input type="hidden" name="id" value="${esc(item.id || '')}">
         <div class="housekeeping-profile-editor">
           <button class="housekeeping-avatar housekeeping-avatar--lg" type="button" id="housekeeping-avatar-btn"
-                  style="background:${esc(worker.avatar_color || '#7C3AED')}" aria-label="${esc(t('housekeeping.profilePicture'))}">
-            ${worker.avatar_data ? `<img src="${esc(worker.avatar_data)}" alt="${esc(worker.display_name || '')}">` : esc(initials(worker.display_name || 'HK'))}
+                  style="background:${esc(item.avatar_color || '#7C3AED')}" aria-label="${esc(t('housekeeping.profilePicture'))}">
+            ${item.avatar_data ? `<img src="${esc(item.avatar_data)}" alt="${esc(item.display_name || '')}">` : esc(initials(item.display_name || 'HK'))}
           </button>
           <input class="sr-only" type="file" id="housekeeping-avatar-file" accept="image/png,image/jpeg,image/webp">
           <div class="housekeeping-profile-editor__fields">
             <label class="housekeeping-field">
               <span>${esc(t('housekeeping.workerName'))}</span>
-              <input name="display_name" required maxlength="128" value="${esc(worker.display_name || '')}">
+              <input name="display_name" required maxlength="128" value="${esc(item.display_name || '')}">
             </label>
             <label class="housekeeping-field">
               <span>${esc(t('housekeeping.workerUsername'))}</span>
-              <input name="username" maxlength="64" autocomplete="off" value="${esc(worker.username || '')}">
+              <input name="username" maxlength="64" autocomplete="off" value="${esc(item.username || '')}">
             </label>
           </div>
         </div>
         <div class="housekeeping-form-grid housekeeping-form-grid--wide">
           <label class="housekeeping-field">
             <span>${esc(t('housekeeping.workerPhone'))}</span>
-            <input name="phone" type="tel" autocomplete="tel" value="${esc(worker.phone || '')}">
+            <input name="phone" type="tel" autocomplete="tel" value="${esc(item.phone || '')}">
           </label>
           <label class="housekeeping-field">
             <span>${esc(t('housekeeping.workerEmail'))}</span>
-            <input name="email" type="email" autocomplete="email" value="${esc(worker.email || '')}">
+            <input name="email" type="email" autocomplete="email" value="${esc(item.email || '')}">
           </label>
           <label class="housekeeping-field">
             <span>${esc(t('housekeeping.workerBirthDate'))}</span>
-            <input name="birth_date" type="date" value="${esc(worker.birth_date || '')}">
+            <input name="birth_date" type="date" value="${esc(item.birth_date || '')}">
           </label>
           <label class="housekeeping-field">
             <span>${esc(t('housekeeping.dailyRate'))}</span>
-            <input name="daily_rate" type="number" min="0" step="0.01" inputmode="decimal" value="${esc(worker.daily_rate ?? 0)}">
+            <input name="daily_rate" type="number" min="0" step="0.01" inputmode="decimal" value="${esc(item.daily_rate ?? 0)}">
           </label>
           <label class="housekeeping-field housekeeping-field--color">
             <span>${esc(t('housekeeping.calendarColor'))}</span>
-            <input name="calendar_color" type="color" value="${esc(worker.calendar_color || '#7C3AED')}">
+            <input name="calendar_color" type="color" value="${esc(item.calendar_color || '#7C3AED')}">
           </label>
           <label class="housekeeping-field">
             <span>${esc(t('housekeeping.paymentSchedule'))}</span>
             <select name="payment_schedule">
-              <option value="daily"${worker.payment_schedule === 'daily' ? ' selected' : ''}>${esc(t('housekeeping.scheduleDaily'))}</option>
-              <option value="twice_monthly"${worker.payment_schedule === 'twice_monthly' ? ' selected' : ''}>${esc(t('housekeeping.scheduleTwiceMonthly'))}</option>
-              <option value="monthly"${!worker.payment_schedule || worker.payment_schedule === 'monthly' ? ' selected' : ''}>${esc(t('housekeeping.scheduleMonthly'))}</option>
+              <option value="daily"${item.payment_schedule === 'daily' ? ' selected' : ''}>${esc(t('housekeeping.scheduleDaily'))}</option>
+              <option value="twice_monthly"${item.payment_schedule === 'twice_monthly' ? ' selected' : ''}>${esc(t('housekeeping.scheduleTwiceMonthly'))}</option>
+              <option value="monthly"${!item.payment_schedule || item.payment_schedule === 'monthly' ? ' selected' : ''}>${esc(t('housekeeping.scheduleMonthly'))}</option>
             </select>
           </label>
           <label class="housekeeping-field housekeeping-field--color">
             <span>${esc(t('housekeeping.profileColor'))}</span>
-            <input name="avatar_color" type="color" value="${esc(worker.avatar_color || '#7C3AED')}">
+            <input name="avatar_color" type="color" value="${esc(item.avatar_color || '#7C3AED')}">
           </label>
         </div>
         <label class="housekeeping-field">
           <span>${esc(t('housekeeping.workerNotes'))}</span>
-          <textarea name="notes" rows="3" maxlength="5000">${esc(worker.notes || '')}</textarea>
+          <textarea name="notes" rows="3" maxlength="5000">${esc(item.notes || '')}</textarea>
         </label>
         <button class="btn btn--primary housekeeping-form-submit" type="submit">
           <i data-lucide="save" aria-hidden="true"></i>
           <span>${esc(t('common.save'))}</span>
         </button>
       </form>
-    </section>
-  `);
-
-  content.querySelector('#housekeeping-new-worker')?.addEventListener('click', () => {
-    state.editingWorker = null;
-    renderStaff(content);
+    `,
+    onSave: (panel) => {
+      panel.querySelector('#housekeeping-worker-form')?.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const form = event.currentTarget;
+        const fields = form.elements;
+        try {
+          await api.post('/housekeeping/worker', {
+            id: fields.id.value || null,
+            display_name: fields.display_name.value.trim(),
+            username: fields.username.value.trim() || null,
+            phone: fields.phone.value.trim() || null,
+            email: fields.email.value.trim() || null,
+            birth_date: fields.birth_date.value || null,
+            daily_rate: Number(fields.daily_rate.value || 0),
+            payment_schedule: fields.payment_schedule.value,
+            calendar_color: fields.calendar_color.value,
+            avatar_color: fields.avatar_color.value,
+            avatar_data: state.workerAvatar,
+            notes: fields.notes.value.trim() || null,
+          });
+          window.oikos?.showToast(t('housekeeping.workerSavedToast'), 'success');
+          await loadData();
+          closeModal({ force: true });
+          renderStaff(content);
+        } catch (err) {
+          window.oikos?.showToast(err.message, 'danger');
+        }
+      });
+    },
   });
-  content.querySelectorAll('[data-edit-worker]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      state.editingWorker = state.workers.find((item) => String(item.id) === btn.dataset.editWorker) || null;
-      renderStaff(content);
-    });
-  });
 
-  const avatarFile = content.querySelector('#housekeeping-avatar-file');
-  const avatarButton = content.querySelector('#housekeeping-avatar-btn');
+  const panel = document.querySelector('.modal-panel');
+  const avatarFile = panel?.querySelector('#housekeeping-avatar-file');
+  const avatarButton = panel?.querySelector('#housekeeping-avatar-btn');
   avatarButton?.addEventListener('click', () => avatarFile?.click());
   avatarFile?.addEventListener('change', () => {
     const file = avatarFile.files?.[0];
@@ -531,33 +580,7 @@ function renderStaff(content) {
     });
     reader.readAsDataURL(file);
   });
-  content.querySelector('#housekeeping-worker-form')?.addEventListener('submit', async (event) => {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const fields = form.elements;
-    try {
-      await api.post('/housekeeping/worker', {
-        id: fields.id.value || null,
-        display_name: fields.display_name.value.trim(),
-        username: fields.username.value.trim() || null,
-        phone: fields.phone.value.trim() || null,
-        email: fields.email.value.trim() || null,
-        birth_date: fields.birth_date.value || null,
-        daily_rate: Number(fields.daily_rate.value || 0),
-        payment_schedule: fields.payment_schedule.value,
-        calendar_color: fields.calendar_color.value,
-        avatar_color: fields.avatar_color.value,
-        avatar_data: state.workerAvatar,
-        notes: fields.notes.value.trim() || null,
-      });
-      window.oikos?.showToast(t('housekeeping.workerSavedToast'), 'success');
-      await loadData();
-      state.editingWorker = null;
-      renderStaff(content);
-    } catch (err) {
-      window.oikos?.showToast(err.message, 'danger');
-    }
-  });
+  if (window.lucide) window.lucide.createIcons({ el: panel });
 }
 
 export async function render(container) {

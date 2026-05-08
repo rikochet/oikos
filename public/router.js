@@ -1005,7 +1005,7 @@ function navItems() {
     { path: '/contacts',  label: t('nav.contacts'),  icon: 'book-user',        module: 'contacts'  },
     { path: '/budget',    label: t('nav.budget'),    icon: 'wallet',           module: 'budget'    },
     { path: '/documents', label: t('nav.documents'), icon: 'folder-lock',      module: 'documents' },
-    { path: '/housekeeping', label: t('nav.housekeeping'), icon: 'sparkles',   module: 'housekeeping' },
+    { path: '/housekeeping', label: t('nav.housekeeping'), icon: 'paintbrush', module: 'housekeeping' },
     { path: '/settings',  label: t('nav.settings'),  icon: 'settings',         module: 'settings'  },
     // Kitchen-Gruppe: via Küche-Nav-Button (Bottom-Nav + Sidebar) + kitchen-tabs-bar erreichbar
     { path: '/meals',     label: t('nav.meals'),     icon: 'utensils',      module: 'meals',    kitchenGroup: true },

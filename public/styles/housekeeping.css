@@ -191,6 +191,11 @@
   gap: var(--space-3);
 }
 
+.housekeeping-metrics--compact {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: var(--space-3);
+}
+
 .housekeeping-metric {
   min-height: 104px;
   padding: var(--space-3);
@@ -428,6 +433,17 @@
   padding: var(--space-3);
 }
 
+.housekeeping-report-item--visit {
+  grid-template-columns: 48px minmax(0, 1fr) auto;
+}
+
+.housekeeping-report-item--visit .housekeeping-avatar img {
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  background: transparent;
+}
+
 .housekeeping-report-item img,
 .housekeeping-report-item > svg {
   width: 56px;
@@ -446,6 +462,37 @@
 .housekeeping-report-item span {
   color: var(--color-text-secondary);
   font-size: var(--text-sm);
+}
+
+.housekeeping-report-modal {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.housekeeping-report-details {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.housekeeping-report-details div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.housekeeping-report-details dt {
+  color: var(--color-text-secondary);
+  font-size: var(--text-sm);
+}
+
+.housekeeping-report-details dd {
+  margin: 0;
+  font-weight: var(--font-weight-semibold);
+  text-align: right;
 }
 
 .housekeeping-staff-row {
@@ -484,6 +531,7 @@
 
 @media (max-width: 720px) {
   .housekeeping-metrics,
+  .housekeeping-metrics--compact,
   .housekeeping-form-grid,
   .housekeeping-form-grid--wide,
   .housekeeping-profile-editor {

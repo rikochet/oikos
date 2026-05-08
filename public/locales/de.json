@@ -1059,7 +1059,12 @@
     "helpTooltipCalDAV": "CalDAV ermöglicht die Synchronisation von Kalendern mit iCloud, Nextcloud und anderen CalDAV-Servern.",
     "helpTooltipCardDAV": "CardDAV ermöglicht die Synchronisation von Kontakten mit iCloud, Nextcloud und anderen CardDAV-Servern.",
     "emptyStateAddFirst": "Füge dein erstes Konto hinzu",
-    "emptyStateNoAccounts": "Noch keine Konten verbunden"
+    "emptyStateNoAccounts": "Noch keine Konten verbunden",
+    "sectionHousekeeping": "Housekeeping",
+    "housekeepingPaymentsTitle": "Payment tasks",
+    "housekeepingPaymentTasksLabel": "Create a payment task on each housekeeper check-in",
+    "housekeepingPaymentTasksHint": "When enabled, each check-in creates a task for paying the staff member. Completing that task marks the visit payment as paid.",
+    "housekeepingPaymentTasksSaved": "Housekeeping payment setting saved."
   },
   "login": {
     "tagline": "Familienplanung. Sicher. Datenschutzfreundlich. Open Source.",
@@ -1338,7 +1343,7 @@
     "createTask": "Aufgabe erstellen",
     "taskCreatedToast": "Hauspflege-Aufgabe erstellt.",
     "dashboard": "Dashboard",
-    "reports": "Meldungen",
+    "reports": "Reports",
     "visitsThisMonth": "Besuche im Monat",
     "lastVisit": "Letzter Besuch",
     "pendingChores": "Offene Aufgaben",
@@ -1374,6 +1379,19 @@
     "noWorkers": "Noch keine Hauspflege-Person registriert.",
     "moreWorkers": "+{{count}} weitere",
     "checkInDisabled": "Lege zuerst eine Hauspflege-Person an.",
-    "calendarColor": "Kalenderfarbe"
+    "calendarColor": "Kalenderfarbe",
+    "visitRecordedAt": "Visit recorded at",
+    "checkedInToday": "Recorded today",
+    "visitReports": "Staff visit reports",
+    "noVisitReports": "No staff visits recorded this month.",
+    "openVisitReport": "Open visit report",
+    "visitReportDetails": "Visit report",
+    "paymentPaid": "Paid",
+    "paymentPending": "Pending",
+    "totalPayment": "Total payment",
+    "paymentStatus": "Payment status",
+    "paymentTask": "Payment task",
+    "calendarEvent": "Calendar event",
+    "notAvailable": "Not available"
   }
 }

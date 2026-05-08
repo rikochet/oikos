@@ -979,7 +979,12 @@
     "addressbookEnabled": "Addressbook enabled",
     "addressbookDisabled": "Addressbook disabled",
     "addressbooksRefreshed": "Addressbooks refreshed",
-    "deleteCardDAVAccountConfirm": "Really delete CardDAV account? All synced contacts will remain but lose their CardDAV link."
+    "deleteCardDAVAccountConfirm": "Really delete CardDAV account? All synced contacts will remain but lose their CardDAV link.",
+    "sectionHousekeeping": "Housekeeping",
+    "housekeepingPaymentsTitle": "Payment tasks",
+    "housekeepingPaymentTasksLabel": "Create a payment task on each housekeeper check-in",
+    "housekeepingPaymentTasksHint": "When enabled, each check-in creates a task for paying the staff member. Completing that task marks the visit payment as paid.",
+    "housekeepingPaymentTasksSaved": "Housekeeping payment setting saved."
   },
   "login": {
     "tagline": "Familjeplanering. Säker. Sekretessvänlig. Öppen källkod.",
@@ -1260,7 +1265,7 @@
     "createTask": "Skapa uppgift",
     "taskCreatedToast": "Städuppgift skapad.",
     "dashboard": "Översikt",
-    "reports": "Rapporter",
+    "reports": "Reports",
     "visitsThisMonth": "Besök denna månad",
     "lastVisit": "Senaste besök",
     "pendingChores": "Väntande uppgifter",
@@ -1296,6 +1301,19 @@
     "noWorkers": "Ingen städpersonal registrerad.",
     "moreWorkers": "+{{count}} fler",
     "checkInDisabled": "Lägg till personal innan incheckning.",
-    "calendarColor": "Kalenderfärg"
+    "calendarColor": "Kalenderfärg",
+    "visitRecordedAt": "Visit recorded at",
+    "checkedInToday": "Recorded today",
+    "visitReports": "Staff visit reports",
+    "noVisitReports": "No staff visits recorded this month.",
+    "openVisitReport": "Open visit report",
+    "visitReportDetails": "Visit report",
+    "paymentPaid": "Paid",
+    "paymentPending": "Pending",
+    "totalPayment": "Total payment",
+    "paymentStatus": "Payment status",
+    "paymentTask": "Payment task",
+    "calendarEvent": "Calendar event",
+    "notAvailable": "Not available"
   }
 }

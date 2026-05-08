@@ -52,6 +52,7 @@ function publicSession(row) {
     worker_id: row.worker_id ?? null,
     calendar_event_id: row.calendar_event_id ?? null,
     payment_task_id: row.payment_task_id ?? null,
+    receipt_document_id: row.receipt_document_id ?? null,
     check_in: row.check_in,
     check_out: row.check_out,
     daily_rate: Number(row.daily_rate || 0),
@@ -587,11 +588,13 @@ router.get('/visits', (req, res) => {
              u.avatar_color AS worker_avatar_color,
              u.avatar_data AS worker_avatar_data,
              t.status AS payment_task_status,
-             t.title AS payment_task_title
+             t.title AS payment_task_title,
+             fd.name AS receipt_document_name
       FROM housekeeping_work_sessions hws
       LEFT JOIN housekeeping_workers hw ON hw.id = hws.worker_id
       LEFT JOIN users u ON u.id = hw.user_id
       LEFT JOIN tasks t ON t.id = hws.payment_task_id
+      LEFT JOIN family_documents fd ON fd.id = hws.receipt_document_id
       WHERE substr(hws.check_in, 1, 7) = ?
         AND (? IS NULL OR hws.worker_id = ?)
       ORDER BY hws.check_in DESC
@@ -604,6 +607,7 @@ router.get('/visits', (req, res) => {
       payment_schedule: row.payment_schedule ?? 'monthly',
       payment_task_status: row.payment_task_status ?? null,
       payment_task_title: row.payment_task_title ?? null,
+      receipt_document_name: row.receipt_document_name ?? null,
       total_amount: Number(row.daily_rate || 0) + Number(row.extras || 0),
     }));
     const totals = visits.reduce((acc, visit) => {
@@ -675,7 +679,10 @@ router.put('/visits/:id', (req, res) => {
     const vEventTitle = str(req.body.event_title, 'event_title', { max: MAX_TITLE, required: false });
     const vPaymentTitle = str(req.body.payment_title, 'payment_title', { max: MAX_TITLE, required: false });
     const vPaymentDescription = str(req.body.payment_description, 'payment_description', { max: MAX_TEXT, required: false });
-    const errors = collectErrors([vDate, vDailyRate, vExtras, vEventTitle, vPaymentTitle, vPaymentDescription]);
+    const vReceiptId = req.body.receipt_document_id !== undefined && req.body.receipt_document_id !== null && req.body.receipt_document_id !== ''
+      ? validateId(req.body.receipt_document_id, 'receipt_document_id')
+      : { value: null, error: null };
+    const errors = collectErrors([vDate, vDailyRate, vExtras, vEventTitle, vPaymentTitle, vPaymentDescription, vReceiptId]);
     if (errors.length) return res.status(400).json({ error: errors.join(' '), code: 400 });
     if (vDailyRate.value < 0 || (vExtras.value ?? 0) < 0) {
       return res.status(400).json({ error: 'Amounts must be greater than or equal to zero.', code: 400 });
@@ -687,9 +694,16 @@ router.put('/visits/:id', (req, res) => {
     db.get().transaction(() => {
       db.get().prepare(`
         UPDATE housekeeping_work_sessions
-        SET check_in = ?, check_out = ?, daily_rate = ?, extras = ?
+        SET check_in = ?, check_out = ?, daily_rate = ?, extras = ?, receipt_document_id = ?
         WHERE id = ?
-      `).run(checkIn, checkIn, vDailyRate.value, vExtras.value ?? 0, existing.id);
+      `).run(
+        checkIn,
+        checkIn,
+        vDailyRate.value,
+        vExtras.value ?? 0,
+        req.body.receipt_document_id !== undefined ? vReceiptId.value : existing.receipt_document_id,
+        existing.id,
+      );
       updateVisitLinks(
         db.get(),
         existing,
@@ -706,6 +720,27 @@ router.put('/visits/:id', (req, res) => {
     res.json({ data: publicSession(row), summary: monthlySummary(row.check_in.slice(0, 7)) });
   } catch (err) {
     log.error('PUT /visits/:id error:', err);
+    res.status(500).json({ error: 'Internal server error.', code: 500 });
+  }
+});
+
+router.post('/visits/:id/pay', (req, res) => {
+  try {
+    const vId = validateId(req.params.id, 'id');
+    if (vId.error) return res.status(400).json({ error: vId.error, code: 400 });
+    const existing = db.get().prepare('SELECT * FROM housekeeping_work_sessions WHERE id = ?').get(vId.value);
+    if (!existing) return res.status(404).json({ error: 'Visit not found.', code: 404 });
+    const paidAt = nowIso();
+    db.get().transaction(() => {
+      db.get().prepare('UPDATE housekeeping_work_sessions SET paid_at = ? WHERE id = ?').run(paidAt, existing.id);
+      if (existing.payment_task_id) {
+        db.get().prepare('UPDATE tasks SET status = ? WHERE id = ?').run('done', existing.payment_task_id);
+      }
+    })();
+    const row = db.get().prepare('SELECT * FROM housekeeping_work_sessions WHERE id = ?').get(existing.id);
+    res.json({ data: publicSession(row), summary: monthlySummary(row.check_in.slice(0, 7)) });
+  } catch (err) {
+    log.error('POST /visits/:id/pay error:', err);
     res.status(500).json({ error: 'Internal server error.', code: 500 });
   }
 });

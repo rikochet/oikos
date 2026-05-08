@@ -1284,7 +1284,15 @@
     },
     "dropzoneTitle": "Solte o arquivo aqui ou clique para escolher",
     "dropzoneHint": "Arraste um arquivo para esta area, ou use o seletor de arquivos.",
-    "selectedFileLabel": "Selecionado: {{name}}"
+    "selectedFileLabel": "Selecionado: {{name}}",
+    "addFolderButton": "Adicionar pasta",
+    "allFolders": "Todas as pastas",
+    "folderLabel": "Pasta",
+    "noFolder": "Sem pasta",
+    "newFolderTitle": "Nova pasta",
+    "folderNameLabel": "Nome da pasta",
+    "createFolderAction": "Criar pasta",
+    "folderCreatedToast": "Pasta criada."
   },
   "shortcuts": {
     "goKitchen": "Cozinha",
@@ -1400,7 +1408,13 @@
     "deleteVisitConfirm": "Excluir esta visita? O evento do calendário e a tarefa de pagamento vinculados também serão removidos.",
     "visitDeletedToast": "Visita excluída.",
     "visitSavedToast": "Visita atualizada.",
-    "visitDate": "Data da visita"
+    "visitDate": "Data da visita",
+    "markPaid": "Marcar pago",
+    "visitPaidToast": "Pagamento marcado como pago.",
+    "receiptUploadTitle": "Enviar comprovante de pagamento",
+    "receiptUploadHint": "Anexe um comprovante de pagamento. Ele aparecerá em Documentos.",
+    "receiptDocumentName": "Comprovante - {{name}} - {{date}}",
+    "receiptDocumentDescription": "Comprovante de pagamento da visita de faxina de {{name}} em {{date}}."
   },
   "userMultiSelect": {
     "moreUsers": "weitere",

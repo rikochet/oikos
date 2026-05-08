@@ -577,7 +577,68 @@
 
 .housekeeping-staff-log-row__actions {
   display: flex;
+  flex-wrap: wrap;
   gap: var(--space-2);
+}
+
+.housekeeping-log-action {
+  min-height: var(--target-sm);
+  padding-inline: var(--space-3);
+  gap: var(--space-2);
+}
+
+.housekeeping-log-action svg {
+  width: 17px;
+  height: 17px;
+}
+
+.modal-panel .document-dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 132px;
+  padding: var(--space-4);
+  border: 1.5px dashed color-mix(in srgb, var(--module-accent) 48%, var(--color-border));
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--module-accent) 7%, var(--color-surface));
+  color: var(--color-text-secondary);
+  text-align: center;
+  cursor: pointer;
+}
+
+.modal-panel .document-dropzone__icon {
+  width: 42px;
+  height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  color: var(--module-accent);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.modal-panel .document-dropzone__title {
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+
+.modal-panel .document-dropzone__hint,
+.modal-panel .document-dropzone__file {
+  max-width: 100%;
+  font-size: var(--text-xs);
+  overflow-wrap: anywhere;
+}
+
+.modal-panel .document-dropzone__file {
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  color: var(--module-accent);
+  background: color-mix(in srgb, var(--module-accent) 14%, transparent);
+  font-weight: var(--font-weight-semibold);
 }
 
 @media (max-width: 720px) {

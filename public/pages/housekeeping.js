@@ -9,6 +9,8 @@ import { t, formatDate, formatTime } from '/i18n.js';
 import { esc } from '/utils/html.js';
 import { openModal, closeModal, confirmModal } from '/components/modal.js';
 
+const MAX_FILE_SIZE = 5 * 1024 * 1024;
+
 let state = {
   tab: 'dashboard',
   dashboard: null,
@@ -59,6 +61,15 @@ function visitTextPayload(worker, dateValue, dailyRate, extras) {
       amount: money(total),
     }),
   };
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error(t('documents.fileReadError')));
+    reader.readAsDataURL(file);
+  });
 }
 
 async function loadStaffVisits(workerId = state.selectedStaffId, monthValue = state.staffLogMonth) {
@@ -528,6 +539,21 @@ function renderStaff(content) {
       if (visit) openVisitEditModal(visit, content);
     });
   });
+  content.querySelectorAll('[data-pay-visit]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const visit = state.staffVisits.find((item) => String(item.id) === btn.dataset.payVisit);
+      if (!visit) return;
+      try {
+        await api.post(`/housekeeping/visits/${visit.id}/pay`, {});
+        window.oikos?.showToast(t('housekeeping.visitPaidToast'), 'success');
+        await loadData();
+        await loadStaffVisits();
+        renderStaff(content);
+      } catch (err) {
+        window.oikos?.showToast(err.message, 'danger');
+      }
+    });
+  });
   content.querySelectorAll('[data-delete-visit]').forEach((btn) => {
     btn.addEventListener('click', async () => {
       const visit = state.staffVisits.find((item) => String(item.id) === btn.dataset.deleteVisit);
@@ -544,6 +570,7 @@ function renderStaff(content) {
       }
     });
   });
+  if (window.lucide) window.lucide.createIcons({ el: content });
 }
 
 function renderStaffVisitLog() {
@@ -558,11 +585,18 @@ function renderStaffVisitLog() {
           <span>${esc(money(visit.total_amount))} · ${esc(paid ? t('housekeeping.paymentPaid') : t('housekeeping.paymentPending'))}</span>
         </div>
         <div class="housekeeping-staff-log-row__actions">
-          <button class="btn btn--secondary btn--icon" type="button" data-edit-visit="${visit.id}" aria-label="${esc(t('housekeeping.editVisit'))}">
-            <i data-lucide="edit-2" aria-hidden="true"></i>
+          <button class="btn btn--secondary housekeeping-log-action" type="button" data-pay-visit="${visit.id}" ${paid ? 'disabled' : ''}
+                  aria-label="${esc(t('housekeeping.markPaid'))}">
+            <i data-lucide="badge-dollar-sign" aria-hidden="true"></i>
+            <span>${esc(paid ? t('housekeeping.paymentPaid') : t('housekeeping.markPaid'))}</span>
           </button>
-          <button class="btn btn--danger-outline btn--icon" type="button" data-delete-visit="${visit.id}" aria-label="${esc(t('housekeeping.deleteVisit'))}">
+          <button class="btn btn--secondary housekeeping-log-action" type="button" data-edit-visit="${visit.id}" aria-label="${esc(t('housekeeping.editVisit'))}">
+            <i data-lucide="edit-2" aria-hidden="true"></i>
+            <span>${esc(t('housekeeping.editVisit'))}</span>
+          </button>
+          <button class="btn btn--danger-outline housekeeping-log-action" type="button" data-delete-visit="${visit.id}" aria-label="${esc(t('housekeeping.deleteVisit'))}">
             <i data-lucide="trash-2" aria-hidden="true"></i>
+            <span>${esc(t('housekeeping.deleteVisit'))}</span>
           </button>
         </div>
       </article>
@@ -608,6 +642,17 @@ function openVisitEditModal(visit, content) {
             <input name="extras" type="number" min="0" step="0.01" inputmode="decimal" value="${esc(visit.extras ?? 0)}">
           </label>
         </div>
+        <label class="document-dropzone" id="housekeeping-receipt-dropzone" for="housekeeping-receipt-file">
+          <input class="sr-only" id="housekeeping-receipt-file" type="file" accept="image/png,image/jpeg,image/webp,application/pdf,text/plain,text/csv">
+          <span class="document-dropzone__icon">
+            <i data-lucide="receipt" aria-hidden="true"></i>
+          </span>
+          <span class="document-dropzone__title">${esc(t('housekeeping.receiptUploadTitle'))}</span>
+          <span class="document-dropzone__hint">${esc(t('housekeeping.receiptUploadHint'))}</span>
+          <span class="document-dropzone__file" id="housekeeping-receipt-selected" ${visit.receipt_document_name ? '' : 'hidden'}>
+            ${esc(visit.receipt_document_name || '')}
+          </span>
+        </label>
         <button class="btn btn--primary housekeeping-form-submit" type="submit">
           <i data-lucide="save" aria-hidden="true"></i>
           <span>${esc(t('common.save'))}</span>
@@ -622,11 +667,34 @@ function openVisitEditModal(visit, content) {
         const dateValue = fields.date.value;
         const dailyRate = Number(fields.daily_rate.value || 0);
         const extras = Number(fields.extras.value || 0);
+        let receiptDocumentId = visit.receipt_document_id || null;
         try {
+          const file = panel.querySelector('#housekeeping-receipt-file')?.files?.[0];
+          if (file) {
+            if (file.size > MAX_FILE_SIZE) throw new Error(t('documents.fileTooLarge'));
+            const receipt = await api.post('/documents', {
+              name: t('housekeeping.receiptDocumentName', {
+                name: worker?.display_name || t('housekeeping.staff'),
+                date: formatDate(dateValue),
+              }),
+              description: t('housekeeping.receiptDocumentDescription', {
+                name: worker?.display_name || t('housekeeping.staff'),
+                date: formatDate(dateValue),
+              }),
+              category: 'finance',
+              visibility: 'family',
+              status: 'active',
+              allowed_member_ids: [],
+              original_name: file.name,
+              content_data: await readFileAsDataUrl(file),
+            });
+            receiptDocumentId = receipt.data?.id || receiptDocumentId;
+          }
           await api.put(`/housekeeping/visits/${visit.id}`, {
             date: dateValue,
             daily_rate: dailyRate,
             extras,
+            receipt_document_id: receiptDocumentId,
             ...visitTextPayload(worker, dateValue, dailyRate, extras),
           });
           window.oikos?.showToast(t('housekeeping.visitSavedToast'), 'success');
@@ -641,6 +709,18 @@ function openVisitEditModal(visit, content) {
       });
     },
   });
+  const panel = document.querySelector('.modal-panel');
+  const receiptInput = panel?.querySelector('#housekeeping-receipt-file');
+  const receiptSelected = panel?.querySelector('#housekeeping-receipt-selected');
+  receiptInput?.addEventListener('change', () => {
+    const file = receiptInput.files?.[0];
+    if (!receiptSelected) return;
+    receiptSelected.hidden = !file && !visit.receipt_document_name;
+    receiptSelected.textContent = file
+      ? t('documents.selectedFileLabel', { name: file.name })
+      : (visit.receipt_document_name || '');
+  });
+  if (window.lucide) window.lucide.createIcons({ el: panel });
 }
 
 function openStaffModal(worker, content) {

@@ -1295,7 +1295,15 @@
     },
     "dropzoneTitle": "Drop file here or click to choose",
     "dropzoneHint": "Drag a file into this area, or use the file picker.",
-    "selectedFileLabel": "Selected: {{name}}"
+    "selectedFileLabel": "Selected: {{name}}",
+    "addFolderButton": "Add folder",
+    "allFolders": "All folders",
+    "folderLabel": "Folder",
+    "noFolder": "No folder",
+    "newFolderTitle": "New folder",
+    "folderNameLabel": "Folder name",
+    "createFolderAction": "Create folder",
+    "folderCreatedToast": "Folder created."
   },
   "housekeeping": {
     "title": "Cleaner workspace",
@@ -1400,7 +1408,13 @@
     "deleteVisitConfirm": "Delete this visit? The linked calendar event and payment task will also be removed.",
     "visitDeletedToast": "Visit deleted.",
     "visitSavedToast": "Visit updated.",
-    "visitDate": "Visit date"
+    "visitDate": "Visit date",
+    "markPaid": "Mark paid",
+    "visitPaidToast": "Payment marked as paid.",
+    "receiptUploadTitle": "Upload payment receipt",
+    "receiptUploadHint": "Attach a payment receipt. It will appear in Documents.",
+    "receiptDocumentName": "Receipt - {{name}} - {{date}}",
+    "receiptDocumentDescription": "Payment receipt for {{name}} housekeeping visit on {{date}}."
   },
   "userMultiSelect": {
     "moreUsers": "weitere",

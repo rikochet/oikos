@@ -767,6 +767,11 @@ router.put('/:id', (req, res) => {
     const vIcon = req.body.icon !== undefined ? eventIcon(req.body.icon) : event.icon;
     if (!vIcon) return res.status(400).json({ error: 'icon: invalid calendar event icon.', code: 400 });
 
+    const {
+      title, description, start_datetime, end_datetime,
+      all_day, location, color: colorVal, recurrence_rule, attachment_name,
+    } = req.body;
+
     // Validate end >= start (for non-all-day events with both dates)
     const effectiveAllDay = all_day !== undefined ? all_day : event.all_day;
     const effectiveStart = start_datetime !== undefined ? req.body.start_datetime : event.start_datetime;
@@ -785,11 +790,6 @@ router.put('/:id', (req, res) => {
           size: event.attachment_size,
           data: event.attachment_data,
         };
-
-    const {
-      title, description, start_datetime, end_datetime,
-      all_day, location, color: colorVal, recurrence_rule, attachment_name,
-    } = req.body;
 
     const userIds  = req.body.assigned_to !== undefined
       ? parseAssignedTo(req.body.assigned_to)

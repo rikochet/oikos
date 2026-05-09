@@ -357,19 +357,28 @@ function setSavedCalendarView(view) {
 }
 
 // Extract YYYY-MM-DD in the browser's local timezone from any datetime string.
-// For date-only strings (≤10 chars) slicing is safe; for datetime strings with an
-// explicit UTC offset or 'Z' suffix, new Date() converts to local before extraction.
+// Extract YYYY-MM-DD from a datetime string without applying timezone conversion.
+// Datetimes without a 'Z' or offset suffix are treated as local time and sliced directly.
 function localDate(str) {
   if (!str || str.length <= 10) return (str || '').slice(0, 10);
-  const d = new Date(str);
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  // If it has a Z or timezone offset, convert to local; otherwise slice directly
+  if (/[Z]|[+-]\d{2}:?\d{2}$/.test(str)) {
+    const d = new Date(str);
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  }
+  return str.slice(0, 10);
 }
 
-// Extract HH:MM in the browser's local timezone from a datetime string.
+// Extract HH:MM from a datetime string without applying timezone conversion.
 function localTime(str) {
   if (!str || str.length <= 10) return '00:00';
-  const d = new Date(str);
-  return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  // If it has a Z or timezone offset, convert to local; otherwise slice directly
+  if (/[Z]|[+-]\d{2}:?\d{2}$/.test(str)) {
+    const d = new Date(str);
+    return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+  const timePart = str.slice(11, 16);
+  return timePart || '00:00';
 }
 
 function addMonths(dateStr, n) {

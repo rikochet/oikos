@@ -1360,6 +1360,17 @@ const MIGRATIONS = [
       WHERE end_datetime LIKE '%Z';
     `,
   },
+  {
+    version: 40,
+    description: 'Fix calendar events with end before start',
+    up: `
+      UPDATE calendar_events
+      SET end_datetime = start_datetime
+      WHERE end_datetime IS NOT NULL
+        AND end_datetime != ''
+        AND end_datetime < start_datetime;
+    `,
+  },
 ];
 
 /**

@@ -1351,6 +1351,15 @@ const MIGRATIONS = [
       CREATE INDEX IF NOT EXISTS idx_calendar_attachment_document ON calendar_events(attachment_document_id);
     `,
   },
+  {
+    version: 39,
+    description: 'Fix calendar end_datetime UTC Z suffix',
+    up: `
+      UPDATE calendar_events
+      SET end_datetime = REPLACE(end_datetime, 'Z', '')
+      WHERE end_datetime LIKE '%Z';
+    `,
+  },
 ];
 
 /**

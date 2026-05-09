@@ -14,7 +14,7 @@
  */
 
 const SHELL_CACHE   = 'oikos-shell-v72';
-const PAGES_CACHE   = 'oikos-pages-v67';
+const PAGES_CACHE   = 'oikos-pages-v68';
 const LOCALES_CACHE = 'oikos-locales-v16';
 const ASSETS_CACHE  = 'oikos-assets-v67';
 const BYPASS_CACHE  = 'oikos-bypass-flag';

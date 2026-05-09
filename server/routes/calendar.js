@@ -684,6 +684,8 @@ router.post('/', (req, res) => {
     if (errors.length) return res.status(400).json({ error: errors.join(' '), code: 400 });
     if (!vIcon) return res.status(400).json({ error: 'icon: invalid calendar event icon.', code: 400 });
 
+    const { all_day = 0 } = req.body;
+
     // Validate end >= start (for non-all-day events with both dates)
     if (!all_day && vEnd.value && vStart.value) {
       const startMs = new Date(vStart.value).getTime();
@@ -692,8 +694,6 @@ router.post('/', (req, res) => {
         return res.status(400).json({ error: 'Endzeit muss nach Startzeit liegen.', code: 400 });
       }
     }
-
-    const { all_day = 0 } = req.body;
     const userIds  = parseAssignedTo(req.body.assigned_to);
     const firstUid = userIds[0] ?? null;
 

@@ -684,6 +684,15 @@ router.post('/', (req, res) => {
     if (errors.length) return res.status(400).json({ error: errors.join(' '), code: 400 });
     if (!vIcon) return res.status(400).json({ error: 'icon: invalid calendar event icon.', code: 400 });
 
+    // Validate end >= start (for non-all-day events with both dates)
+    if (!all_day && vEnd.value && vStart.value) {
+      const startMs = new Date(vStart.value).getTime();
+      const endMs = new Date(vEnd.value).getTime();
+      if (endMs < startMs) {
+        return res.status(400).json({ error: 'Endzeit muss nach Startzeit liegen.', code: 400 });
+      }
+    }
+
     const { all_day = 0 } = req.body;
     const userIds  = parseAssignedTo(req.body.assigned_to);
     const firstUid = userIds[0] ?? null;
@@ -757,6 +766,18 @@ router.put('/:id', (req, res) => {
     if (errors.length) return res.status(400).json({ error: errors.join(' '), code: 400 });
     const vIcon = req.body.icon !== undefined ? eventIcon(req.body.icon) : event.icon;
     if (!vIcon) return res.status(400).json({ error: 'icon: invalid calendar event icon.', code: 400 });
+
+    // Validate end >= start (for non-all-day events with both dates)
+    const effectiveAllDay = all_day !== undefined ? all_day : event.all_day;
+    const effectiveStart = start_datetime !== undefined ? req.body.start_datetime : event.start_datetime;
+    const effectiveEnd = end_datetime !== undefined ? req.body.end_datetime : event.end_datetime;
+    if (!effectiveAllDay && effectiveEnd && effectiveStart) {
+      const startMs = new Date(effectiveStart).getTime();
+      const endMs = new Date(effectiveEnd).getTime();
+      if (endMs < startMs) {
+        return res.status(400).json({ error: 'Endzeit muss nach Startzeit liegen.', code: 400 });
+      }
+    }
     const attachment = req.body.attachment_data !== undefined
       ? (req.body.attachment_data ? parseAttachment(req.body.attachment_data) : { mime: null, size: null, data: null })
       : {

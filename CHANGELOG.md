@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Add HKD (Hong Kong Dollar) to budget currency options
+
 ## [0.50.0] - 2026-05-08
 
 ### Added

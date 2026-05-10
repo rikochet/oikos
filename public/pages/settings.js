@@ -6,7 +6,7 @@
 
 import { api, auth } from '/api.js';
 import { openModal, closeModal, confirmModal } from '/components/modal.js';
-import { t, formatDate, formatTime, dateInputPlaceholder, formatDateInput, parseDateInput, isDateInputValid, getDateFormat } from '/i18n.js';
+import { t, formatDate, formatTime, dateInputPlaceholder, formatDateInput, parseDateInput, isDateInputValid, getDateFormat, getLocale } from '/i18n.js';
 import { esc } from '/utils/html.js';
 import { renderSettingsSidebar, renderBreadcrumb, getLastActivePage, setActivePage, findSectionAndPage } from '/utils/settings-nav.js';
 import { renderSubTabs } from '/utils/sub-tabs.js';
@@ -1276,6 +1276,19 @@ function bindEvents(container, user, users, categories, icsSubscriptions, apiTok
       try {
         await api.put('/preferences', { date_format: dateFormatSelect.value });
         try { localStorage.setItem('oikos-date-format', dateFormatSelect.value); } catch (_) {}
+
+        // Sync html[lang] region with explicit date format preference
+        const base = getLocale();
+        const regionMap = {
+          dmy: 'en-GB', dmy_slash: 'en-GB', dmy_dot: 'en-GB',
+          mdy: 'en-US', mdy_dot: 'en-US',
+          ymd: 'en-CA', ymd_dot: 'en-CA', ymd_slash: 'en-CA',
+        };
+        const newTag = regionMap[dateFormatSelect.value];
+        if (newTag && base === 'en') {
+          document.documentElement.lang = newTag;
+        }
+
         window.dispatchEvent(new CustomEvent('date-format-changed', { detail: { dateFormat: dateFormatSelect.value } }));
         window.oikos?.showToast(t('settings.dateFormatSavedToast'), 'success');
       } catch (err) {

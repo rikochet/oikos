@@ -14,21 +14,33 @@ const DEFAULT_DATE_FORMAT = 'dmy';
 const DEFAULT_TIME_FORMAT = '24h';
 const VALID_TIME_FORMATS = ['24h', '12h'];
 
-let currentLocale = DEFAULT_LOCALE;
+let currentLocale = DEFAULT_LOCALE;   // Base language code for translations (e.g. 'en')
+let currentLangTag = DEFAULT_LOCALE;  // Full BCP 47 tag for html[lang] (e.g. 'en-GB')
 let translations = {};
 let fallbackTranslations = {};
 
-/** Resolve locale: manual override > navigator.language > English > default */
+/**
+ * Resolve locale from storage or browser.
+ * Returns { base, tag } where base is the language code for translations,
+ * and tag is the full BCP 47 tag for html[lang].
+ */
 function resolveLocale() {
   const stored = localStorage.getItem(STORAGE_KEY);
-  if (stored && SUPPORTED_LOCALES.includes(stored)) return stored;
+  if (stored) {
+    const base = stored.split('-')[0].toLowerCase();
+    if (SUPPORTED_LOCALES.includes(base)) {
+      return { base, tag: stored };
+    }
+  }
 
   const browserLocales = navigator.languages || [navigator.language];
   for (const tag of browserLocales) {
     const base = tag.split('-')[0].toLowerCase();
-    if (SUPPORTED_LOCALES.includes(base)) return base;
+    if (SUPPORTED_LOCALES.includes(base)) {
+      return { base, tag };
+    }
   }
-  return 'en';
+  return { base: 'en', tag: 'en' };
 }
 
 /** Lade eine Locale-JSON-Datei */
@@ -40,7 +52,10 @@ async function loadLocale(locale) {
 
 /** Initialisierung - einmal beim App-Start aufrufen */
 export async function initI18n() {
-  currentLocale = resolveLocale();
+  const resolved = resolveLocale();
+  currentLocale = resolved.base;
+  currentLangTag = resolved.tag;
+
   fallbackTranslations = await loadLocale(DEFAULT_LOCALE);
   if (currentLocale !== DEFAULT_LOCALE) {
     try {
@@ -48,22 +63,27 @@ export async function initI18n() {
     } catch {
       translations = fallbackTranslations;
       currentLocale = DEFAULT_LOCALE;
+      currentLangTag = DEFAULT_LOCALE;
     }
   } else {
     translations = fallbackTranslations;
   }
-  document.documentElement.lang = currentLocale;
+  document.documentElement.lang = currentLangTag;
 }
 
 /** Sprache wechseln - löst 'locale-changed' Event aus */
 export async function setLocale(locale) {
-  if (!SUPPORTED_LOCALES.includes(locale)) return;
+  const base = locale.split('-')[0].toLowerCase();
+  if (!SUPPORTED_LOCALES.includes(base)) return;
+
   localStorage.setItem(STORAGE_KEY, locale);
-  currentLocale = locale;
-  const loaded = locale === DEFAULT_LOCALE
+  currentLocale = base;
+  currentLangTag = locale;
+
+  const loaded = base === DEFAULT_LOCALE
     ? fallbackTranslations
-    : await loadLocale(locale);
-  if (currentLocale !== locale) return;
+    : await loadLocale(base);
+  if (currentLocale !== base) return;
   translations = loaded;
   document.documentElement.lang = locale;
   window.dispatchEvent(new CustomEvent('locale-changed', { detail: { locale } }));
@@ -125,9 +145,14 @@ function formatDateParts(date, useUtc = false) {
   }
 }
 
-/** Aktuelle Locale abfragen */
+/** Aktuelle Locale abfragen (base code für Intl APIs) */
 export function getLocale() {
   return currentLocale;
+}
+
+/** Voller BCP 47 Language Tag für html[lang] */
+export function getLangTag() {
+  return currentLangTag;
 }
 
 /** Liste der unterstützten Locales */
